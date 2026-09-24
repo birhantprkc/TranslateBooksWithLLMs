@@ -19,7 +19,8 @@ from .context_optimizer import (
     AdaptiveContextManager,
     validate_configuration,
     INITIAL_CONTEXT_SIZE,
-    CONTEXT_STEP
+    CONTEXT_STEP,
+    REFINEMENT_MIN_CONTEXT,
 )
 from .progress_tracker import TokenProgressTracker
 from .chunking.token_chunker import TokenChunker
@@ -766,8 +767,8 @@ async def refine_chunks(
     # - The prompt includes the already-translated text (input)
     # - Plus context before/after
     # - Plus instructions
-    # So we start with at least 4096 or the user's context_window, whichever is larger
-    REFINEMENT_MIN_CONTEXT = 4096
+    # So we start with at least REFINEMENT_MIN_CONTEXT or the user's context_window,
+    # whichever is larger
 
     if auto_adjust_context:
         if is_known_thinking_model:

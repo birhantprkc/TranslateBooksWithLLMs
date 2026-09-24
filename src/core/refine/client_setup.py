@@ -11,7 +11,7 @@ from src.config import (
     THINKING_MODELS,
     ADAPTIVE_CONTEXT_INITIAL_THINKING,
 )
-from src.core.context_optimizer import INITIAL_CONTEXT_SIZE
+from src.core.context_optimizer import INITIAL_CONTEXT_SIZE, REFINEMENT_MIN_CONTEXT
 from src.core.epub.translator import _create_llm_client, _create_context_manager
 
 
@@ -43,6 +43,8 @@ def build_refine_client(
         )
     else:
         initial_context = context_window
+    # Same floor as the TXT/SRT refine path (refine_chunks in translator.py).
+    initial_context = max(initial_context, REFINEMENT_MIN_CONTEXT)
 
     llm_client = _create_llm_client(
         llm_provider=llm_provider,
