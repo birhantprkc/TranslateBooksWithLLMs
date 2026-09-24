@@ -324,6 +324,10 @@ CONTEXT_STEP = ADAPTIVE_CONTEXT_STEP
 INITIAL_CONTEXT_SIZE = ADAPTIVE_CONTEXT_INITIAL
 STABILITY_WINDOW = ADAPTIVE_CONTEXT_STABILITY_WINDOW
 
+# Floor for the refinement pass: its prompt carries the draft chunk plus the
+# previous and next chunks as context, so it is roughly 3x a translation prompt.
+REFINEMENT_MIN_CONTEXT = 4096
+
 # Threshold for considering context as "near limit" (95% usage)
 NEAR_LIMIT_THRESHOLD = 0.95
 

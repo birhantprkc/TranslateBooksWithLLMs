@@ -1546,6 +1546,56 @@ def _report_statistics(
     if log_callback:
         log_callback("translation_complete", "Body translation complete")
 
+async def _request_refinement_with_adaptive_context(
+    llm_client: Any,
+    context_manager: Optional[AdaptiveContextManager],
+    prompt_pair: Any,
+    model_name: str,
+    log_callback: Optional[Callable],
+) -> Any:
+    """Send one refinement request, growing the context window on overflow.
+
+    Mirrors the retry strategy of the translation pass: an overflow (or the
+    repetition loop a too-small window provokes) bumps the context and retries
+    until the context manager refuses. Any other error propagates.
+    """
+    from ..llm import ContextOverflowError, RepetitionLoopError
+
+    while True:
+        if context_manager and hasattr(llm_client, 'context_window'):
+            new_ctx = context_manager.get_context_size()
+            if llm_client.context_window != new_ctx:
+                llm_client.context_window = new_ctx
+
+        try:
+            llm_response = await llm_client.make_request(
+                prompt_pair.user, model_name, system_prompt=prompt_pair.system
+            )
+        except (ContextOverflowError, RepetitionLoopError):
+            if context_manager and context_manager.should_retry_with_larger_context(True, 0):
+                context_manager.increase_context()
+                if log_callback:
+                    log_callback("refinement_overflow_retry",
+                        f"Refinement context overflow - retrying with {context_manager.get_context_size()} tokens")
+                continue
+            raise
+
+        if context_manager and llm_response:
+            if llm_response.was_truncated and context_manager.should_retry_with_larger_context(
+                True, llm_response.context_used
+            ):
+                context_manager.increase_context()
+                continue
+            if llm_response.prompt_tokens > 0:
+                context_manager.record_success(
+                    llm_response.prompt_tokens,
+                    llm_response.completion_tokens,
+                    llm_response.context_limit
+                )
+
+        return llm_response
+
+
 async def _refine_epub_chunks(
     translated_chunks: List[str],
     chunks: List[Dict],
@@ -1650,16 +1700,10 @@ async def _refine_epub_chunks(
                     'model': model_name
                 })
 
-            # Set context from manager if available
-            if context_manager and hasattr(llm_client, 'context_window'):
-                new_ctx = context_manager.get_context_size()
-                if llm_client.context_window != new_ctx:
-                    llm_client.context_window = new_ctx
-
             import time
             start_time = time.time()
-            llm_response = await llm_client.make_request(
-                prompt_pair.user, model_name, system_prompt=prompt_pair.system
+            llm_response = await _request_refinement_with_adaptive_context(
+                llm_client, context_manager, prompt_pair, model_name, log_callback
             )
             execution_time = time.time() - start_time
 
